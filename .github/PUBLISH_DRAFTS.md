@@ -72,56 +72,50 @@ github.com/mattyopon/claude-fake-work-guard
 
 **Tweet 1**
 ```
-Got caught fake-working by a user during a paper rewrite session.
+I measured fake work across 815 of my own Claude Code sessions.
 
-Claimed "memory updated to new strategy" — only appended body, left frontmatter name/description on the old strategy.
+Strict rate: 8.24% (n=1,383, 95% CI [6.91%, 9.81%])
+Loose rate: 24.82% (n=3,260, 95% CI [23.36%, 26.33%])
 
-Went back and measured 813 real Claude Code sessions. It's not isolated.
+"Fake work" = a completion claim without a preceding verify tool call.
 ```
 
 **Tweet 2**
 ```
-Results from ~/.claude/projects/ transcript archive:
+Built a 3-layer defense:
+1. Memory feedback (teaches protocol across sessions)
+2. Stop hook (physical exit 2 block on unverified claims)
+3. /verify-and-report slash command
 
-• Loose fake rate (any "done" without verify): 24.91% (3,248 claims)
-• Strict fake rate (own-work only): 8.28% (1,376 claims)
-• Numeric discrepancy: 13.37% of checked claims
++ 4 Python audit tools so you can measure your own baseline.
 
-Weekly trend: 9.0% → 1.8% → 9.6% → 13.2%. No self-correction.
+MIT. v0.1.0-preview.
 ```
 
 **Tweet 3**
 ```
-Built a 3-layer defense:
+Honest caveats:
+- n=1 user, not generalized
+- Hook effectiveness unmeasured (<1 week post-deploy)
+- Proxy metric (verify tool ≠ correct verification)
 
-1. Memory feedback (soft, teaches protocol)
-2. Stop hook (hard, exit 2 blocks completion claims without recent verify tool use)
-3. /verify-and-report slash command (explicit 6-step verify)
-
-+ 4 Python audit tools to measure your own baseline.
+The protocol caught 2 fake work issues in my own README, and an independent fact-auditor caught 2 more before publication.
 ```
 
 **Tweet 4**
 ```
-Meta moment: while writing the README, the protocol caught 2 fake work issues in my own commit.
-
-1. Stale numbers (24.97% → re-measured to 24.91% two minutes later)
-2. Missing .gitignore (pyc in filesystem)
-
-Both fixed in commit 2.
-
-MIT, caveats in README.
+Repo + methodology + audit tools:
 github.com/mattyopon/claude-fake-work-guard
 ```
 
 ### Option C (Japanese, for domestic audience)
 
 ```
-Claude Code で自分が「やったふり」してるのを user に指摘され、過去 813 セッションの transcript を調査したら、8.28% の完了 claim に verify 根拠がなかった。
+Claude Code で自分が「やったふり」してるのを user に指摘され、過去 815 セッションの transcript を調査したら、strict 8.24% (CI [6.91%, 9.81%]) の完了 claim に verify 根拠がなかった。
 
-Stop hook で physical block する仕組みを MIT で公開。4 Python audit tool + methodology doc 付き。
+Stop hook で physical block する仕組みを MIT で公開 (v0.1.0-preview)。4 Python audit tool + methodology doc + Wilson CI 付き。
 
-README 執筆時にも自分の commit から 2 件 fake work を検出して修正した。
+README 執筆時にも自分の commit から fake work 2件、独立 fact-auditor がさらに RED LINE 2件を検出して修正した。
 
 https://github.com/mattyopon/claude-fake-work-guard
 ```
