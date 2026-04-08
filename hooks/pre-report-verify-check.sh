@@ -78,11 +78,12 @@ for line in reversed(lines):
                         last_assistant_text = (c.get("text", "") or "") + last_assistant_text
 
     # Tool use blocks (from user messages containing tool_result, or assistant tool_use)
+    # Verify tools = Bash/Read/Grep/Glob/Edit/Write (same set as analyzer)
     if isinstance(content, list):
         for c in content:
             if isinstance(c, dict) and c.get("type") == "tool_use":
                 name = c.get("name", "")
-                if name in ("Bash", "Read", "Grep", "Glob"):
+                if name in ("Bash", "Read", "Grep", "Glob", "Edit", "Write"):
                     verify_tool_count += 1
 
 # Detect completion claim keywords in most recent assistant text

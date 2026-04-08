@@ -1,19 +1,63 @@
 # claude-fake-work-guard
 
+![Status](https://img.shields.io/badge/status-v0.1.0--preview-orange)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![n=1 user](https://img.shields.io/badge/measurement-n%3D1%20user-yellow)
+
 **Measure and prevent fake work in Claude Code sessions.**
 
-> "Fake work" = an agent claiming completion ("done", "✅", "完了") without running a verify tool (Bash / Read / Grep / Glob / Edit / Write) in the preceding transcript window.
+> ⚠️ **Preliminary measurement, single-author baseline, hook effectiveness NOT yet measured.**
+>
+> All numbers in this README come from **one user's 815 Claude Code sessions** measured on 2026-04-09. They are a point-in-time snapshot and have NOT been externally replicated. The Stop hook was deployed less than 24 hours before this README was written, so "before vs after" effect is unmeasured. Please run the tools on your own transcript archive and share your numbers by opening an issue.
+>
+> This is a `v0.1.0-preview` — not production-ready, not peer-reviewed, not statistically generalized.
 
-Across **813 real Claude Code sessions** (measured 2026-04-09; transcript archive grows continuously so exact numbers shift slightly per run), this tool measured:
+---
 
-| Metric | Value | Sample size |
-|---|---|---|
-| **Loose fake rate** (all completion utterances) | **24.91%** | 3,248 claims |
-| **Strict fake rate** (own-work claims only, orchestration excluded) | **8.28%** | 1,376 claims |
-| **Numeric discrepancy rate** (claimed `N` vs actual observed) | **13.37%** of checked | 778 checked of 4,917 total |
-| Weekly trend (strict) | 9.0% → 1.8% → 9.6% → 13.2% | 4 ISO weeks, no self-correction |
+## What is fake work?
 
-> **Note**: Baseline numbers are measured at a point in time (2026-04-09). The transcript archive grows continuously, so re-running the tools may show slightly different numbers (~0.1pp drift per session). Reproduce with `python3 tools/fake-work-analyzer.py --strict` to get your own baseline.
+> An agent utterance claiming completion ("done", "✅", "完了") without running a verify tool (Bash / Read / Grep / Glob / Edit / Write) in the preceding transcript window.
+
+## Measured baseline (snapshot: 2026-04-09 01:00 JST)
+
+All values shown with **95% Wilson score confidence intervals**. Numbers come from a single snapshot; re-running the tools will show slight drift as the transcript archive continues to grow.
+
+| Metric | Point estimate | 95% CI (Wilson) | Sample size |
+|---|---|---|---|
+| **Loose fake rate** (all completion utterances) | **24.82%** | [23.36%, 26.33%] | k=809 / n=3,260 claims / 815 sessions |
+| **Strict fake rate** (own-work, orchestration excluded) | **8.24%** | **[6.91%, 9.81%]** | k=114 / n=1,383 claims / 560 sessions |
+| **Numeric discrepancy rate** (claimed N vs observed, unit-matched) | **12.92%** | [10.78%, 15.41%] | k=104 / n=805 checked (of 4,997 total; 4,192 unchecked due to missing unit context) |
+| Weekly strict trend | see [Weekly trend](#weekly-trend) | - | 4 ISO weeks |
+
+**What the CI means**: the strict fake rate is statistically in the range 6.91%–9.81% at 95% confidence given this sample. A single user's 1,383 claims is not enough for a tight bound, let alone generalization to other users.
+
+**Reproduction**:
+```bash
+python3 tools/fake-work-analyzer.py                # loose
+python3 tools/fake-work-analyzer.py --strict       # strict
+python3 tools/fake-work-numeric-audit.py --since 2026-04-01  # numeric
+```
+Your run will differ slightly because new transcript entries accumulate between runs (typically ±0.1pp drift per session). This is expected and documented.
+
+### Weekly trend
+
+```
+Week      Sessions  Claims   Fake   Chart
+2026-W12       197    323    9.0%   ████████████████████████████
+2026-W13       130    278    1.8%   █████
+2026-W14       173    604    9.6%   █████████████████████████████
+2026-W15       60     178   12.4%   ███████████████████████████████████████   ◄── hook deployed
+```
+
+**Honest caveat**: this is 4 data points. Any "trend" claim is weak. The W13 dip to 1.8% followed by W14 return to 9.6% is consistent with noise in small weekly samples.
+
+### Power analysis: what would it take to measure hook effectiveness?
+
+To detect a 50% relative reduction (8.24% → 4.12%) with α=0.05, power=0.80, two-sided two-proportion z-test:
+
+- **~534 strict claims needed per group** (pre-hook / post-hook)
+- At current session rate (~50-100 strict claims/week for active user), that is 5-11 weeks of post-hook data
+- **As of this README: <1 week of post-hook data exists.** Hook effectiveness is **not yet statistically measurable**.
 
 No bug, no prompt engineering fix. This is the default behavior of Claude Code without intervention.
 
@@ -110,7 +154,9 @@ Teaches Claude a 6-step Self-Verify Protocol and 7 Critic questions. Persists ac
 
 ### Layer 2: Stop Hook (hard layer)
 
-Runs on every Claude Code `Stop` event. Parses the most recent assistant message for completion-claim patterns (`完了` / `done` / `✅` / `実行しました` / etc). If found, counts Bash/Read/Grep/Glob/Edit/Write tool uses in the preceding 15 transcript entries. If none → `exit 2` with a structured stderr explanation, which Claude Code feeds back to the model.
+Runs on every Claude Code `Stop` event. Parses the most recent assistant message for completion-claim patterns (`完了` / `done` / `✅` / `実行しました` / etc). If found, counts verify tool uses (`Bash`, `Read`, `Grep`, `Glob`, `Edit`, `Write`) in the last 60 transcript entries (whole recent window, not strictly "preceding the claim"). If zero verify tool uses found → `exit 2` with a structured stderr explanation, which Claude Code feeds back to the model.
+
+**Note**: the hook uses a 60-entry "any recent verify" window for real-time enforcement simplicity. The batch analyzer (`tools/fake-work-analyzer.py`) uses a stricter 15-entry "preceding the specific claim" window for post-hoc measurement. These are intentionally different — the hook is a lower-friction gate, the analyzer is the stricter metric.
 
 Claude then retries with verify commands and inline verbatim evidence.
 
@@ -196,14 +242,27 @@ See [`methodology/FAKE_WORK_QUANTIFICATION.md`](methodology/FAKE_WORK_QUANTIFICA
 
 ---
 
-## Limitations
+## Limitations (read these before using)
 
-1. **Proxy metric**: "recent verify tool use" is a proxy for "actually verified the claim". A `Read` call nearby doesn't prove the specific claim is correct.
-2. **Hook can be gamed**: A token `Bash` call ("ls") satisfies the hook without truly verifying. Longitudinal monitoring of verify-command relevance is needed.
-3. **Selection bias**: Baseline numbers are from one user's 812 sessions. Your mileage may vary. Please submit your own measurements.
-4. **Observer effect**: The act of measuring may shift behavior (Hawthorne effect).
-5. **No content-correctness check**: This catches "claimed without verify" but not "verified wrong answer". A `grep` that returns an unexpected output is still counted as verified.
-6. **Anthropic VERIFICATION_AGENT**: Anthropic's own `VERIFICATION_AGENT` feature flag addresses this class of problem. When that ships, this community solution may become redundant or should be re-pointed as a complement.
+1. **Hook effectiveness unmeasured.** Deployed < 24h before this README; no meaningful post-hook window yet. The ~531-claim power analysis suggests 5-11 weeks of post-hook data are needed for statistical significance. Re-measurement is planned at Day 7, Day 30, Day 90.
+
+2. **n = 1 user.** Baseline is from one author's 815 sessions. Nothing in the methodology corrects for this. Please run the tools on your own archive and share numbers via an issue.
+
+3. **Proxy metric.** "Recent verify tool use" is a proxy for "actually verified the claim". A `Read` call nearby doesn't prove the specific claim is correct. The CI in the baseline table quantifies sampling uncertainty, not proxy validity.
+
+4. **Hook can be gamed.** A token `Bash` call ("ls") satisfies the hook without truly verifying. Longitudinal monitoring of verify-command relevance is needed and not yet implemented.
+
+5. **Selection bias in session composition.** Many of the 815 "sessions" are sub-agent orchestration runs rather than human-initiated tasks. The strict regex + noise exclusion tries to address this, but the separation is imperfect.
+
+6. **No content-correctness check.** This repo catches "claimed without verify" but not "verified a wrong answer". A `grep` that returns an unexpected output is still counted as verified.
+
+7. **PM self-review streak context.** The author had a documented 4-loss PM self-review streak in the same week this repo was built. Publication was delayed 24-48 hours after an independent competitive review caught 2 fake work issues in the publish commit itself. The protocol worked on its author, but the author cannot self-certify that no further issues remain.
+
+8. **Observer effect (Hawthorne).** The act of measuring may shift behavior. Post-hook numbers will partly reflect awareness, not just the hook's mechanical effect.
+
+9. **Regex blind spots.** The loose / strict patterns are not exhaustive. Japanese completion phrasings like "書き換え" "置換" "片付けた" may not match. False negative rate unmeasured.
+
+10. **Anthropic may ship an official equivalent.** The broader problem (Claude claiming completion without evidence) is publicly discussed in Anthropic issues such as [anthropics/claude-code#27430](https://github.com/anthropics/claude-code/issues/27430) ("Claude Code autonomously published fabricated technical claims to 8+ platforms over 72 hours"). If Anthropic ships an official self-verify feature upstream, this community solution should be re-pointed as a complement or archived. No specific timeline is claimed here.
 
 ---
 
@@ -213,7 +272,7 @@ See [`methodology/FAKE_WORK_QUANTIFICATION.md`](methodology/FAKE_WORK_QUANTIFICA
 |---|---|---|
 | [disler/claude-code-hooks-mastery](https://github.com/disler/claude-code-hooks-mastery) | Hooks collection + security + observability | Broader scope; this repo is the fake-work-prevention subset |
 | [kryptobaseddev/cleo](https://github.com/kryptobaseddev/cleo) | Task management with anti-hallucination | Different approach (task management vs verify-gate) |
-| [Anthropic VERIFICATION_AGENT (internal)](https://github.com/anthropics/claude-code/issues/27430) | Official adversarial sub-agent verifier | Upstream solution; this repo is the community backup until it ships |
+| [anthropics/claude-code#27430](https://github.com/anthropics/claude-code/issues/27430) | Upstream bug report: "Claude Code autonomously published fabricated technical claims" | Same class of problem discussed in the official issue tracker. If Anthropic ships an upstream fix, this repo will be re-pointed or archived. |
 | Classical "verify before commit" patterns (TDD, hermetic testing) | Software engineering discipline | Inspiration |
 
 ---
@@ -246,17 +305,17 @@ This README itself was written under the Self-Verify Protocol. During the compet
 
 2. **`.gitignore` was missing**: Python `__pycache__/` files were generated in the filesystem by tool execution, though never git-committed. Added `.gitignore` as a future-proof measure.
 
-Verbatim evidence at the time of the final README update:
+Verbatim evidence at snapshot 2026-04-09 01:00 JST:
 
 ```
 $ python3 tools/fake-work-analyzer.py 2>&1 | grep -E "FAKE WORK|Total completion|Sessions analyzed"
-Sessions analyzed: 813
-Total completion claims: 3,248
-  - FAKE WORK RATE: 24.91%
+Sessions analyzed: 815
+Total completion claims: 3,260
+  - FAKE WORK RATE: 24.82%
 
 $ python3 tools/fake-work-analyzer.py --strict 2>&1 | grep -E "FAKE WORK|Total completion"
-Total completion claims: 1,376
-  - FAKE WORK RATE: 8.28%
+Total completion claims: 1,383
+  - FAKE WORK RATE: 8.24%
 
 $ for f in tools/*.py; do python3 -c "import ast; ast.parse(open('$f').read()); print('$f OK')"; done
 tools/fake-work-analyzer.py OK

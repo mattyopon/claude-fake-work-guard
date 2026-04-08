@@ -76,6 +76,6 @@ Include all 4 exit codes in your PR.
 
 This project is maintained by a single person as an open-source side project. Response time to PRs/issues is typically 1-7 days. If you need urgent support, consider forking.
 
-When Anthropic ships the official `VERIFICATION_AGENT` feature, this project will either:
+If Anthropic ships an official upstream fix for this class of problem (see [anthropics/claude-code#27430](https://github.com/anthropics/claude-code/issues/27430)), this project will either:
 - Be re-pointed as a complement to the official feature, or
 - Be archived with a link to the official replacement.
