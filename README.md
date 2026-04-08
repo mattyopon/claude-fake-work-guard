@@ -4,14 +4,16 @@
 
 > "Fake work" = an agent claiming completion ("done", "✅", "完了") without running a verify tool (Bash / Read / Grep / Glob / Edit / Write) in the preceding transcript window.
 
-Across **812 real Claude Code sessions** (196,358 transcript entries, 3,240 completion claims), this tool measured:
+Across **813 real Claude Code sessions** (measured 2026-04-09; transcript archive grows continuously so exact numbers shift slightly per run), this tool measured:
 
-| Metric | Value |
-|---|---|
-| **Loose fake rate** (all completion utterances) | **24.97%** |
-| **Strict fake rate** (own-work claims only, orchestration excluded) | **8.31%** |
-| **Numeric discrepancy rate** (claimed `N` vs actual observed) | **13.37%** of checked |
-| Weekly trend | 9.0% → 1.8% → 9.6% → 13.2%, no self-correction |
+| Metric | Value | Sample size |
+|---|---|---|
+| **Loose fake rate** (all completion utterances) | **24.91%** | 3,248 claims |
+| **Strict fake rate** (own-work claims only, orchestration excluded) | **8.28%** | 1,376 claims |
+| **Numeric discrepancy rate** (claimed `N` vs actual observed) | **13.37%** of checked | 778 checked of 4,917 total |
+| Weekly trend (strict) | 9.0% → 1.8% → 9.6% → 13.2% | 4 ISO weeks, no self-correction |
+
+> **Note**: Baseline numbers are measured at a point in time (2026-04-09). The transcript archive grows continuously, so re-running the tools may show slightly different numbers (~0.1pp drift per session). Reproduce with `python3 tools/fake-work-analyzer.py --strict` to get your own baseline.
 
 No bug, no prompt engineering fix. This is the default behavior of Claude Code without intervention.
 
@@ -238,22 +240,35 @@ MIT License. See [`LICENSE`](LICENSE).
 
 ## Self-Verify Evidence (from session 2026-04-09)
 
-This README itself was written under the Self-Verify Protocol. Verbatim evidence:
+This README itself was written under the Self-Verify Protocol. During the competitive review phase, two issues were caught and fixed:
+
+1. **README numbers were already stale**: initial draft claimed "24.97% / 8.31%" but re-running the analyzer 2 minutes later showed "24.91% / 8.30%" — the transcript archive grows as the session runs. Fixed by adding a freshness note and measurement timestamp.
+
+2. **`.gitignore` was missing**: Python `__pycache__/` files were generated in the filesystem by tool execution, though never git-committed. Added `.gitignore` as a future-proof measure.
+
+Verbatim evidence at the time of the final README update:
 
 ```
-$ ls -la tools/ hooks/ commands/ memory-templates/ methodology/
-tools/fake-work-analyzer.py       (12006 bytes, syntax OK)
-tools/fake-work-numeric-audit.py  (10249 bytes, syntax OK)
-tools/fake-work-memory-audit.py   (5649 bytes, syntax OK)
-tools/fake-work-timeseries.py     (5219 bytes, syntax OK)
-hooks/pre-report-verify-check.sh  (5219 bytes, +x)
-commands/verify-and-report.md     (5221 bytes)
-memory-templates/feedback_pre_report_self_verify.md (6120 bytes)
-methodology/FAKE_WORK_QUANTIFICATION.md (12166 bytes)
+$ python3 tools/fake-work-analyzer.py 2>&1 | grep -E "FAKE WORK|Total completion|Sessions analyzed"
+Sessions analyzed: 813
+Total completion claims: 3,248
+  - FAKE WORK RATE: 24.91%
 
-$ python3 tools/fake-work-analyzer.py --strict 2>&1 | grep "FAKE WORK"
-  - FAKE WORK RATE: 8.31%
+$ python3 tools/fake-work-analyzer.py --strict 2>&1 | grep -E "FAKE WORK|Total completion"
+Total completion claims: 1,376
+  - FAKE WORK RATE: 8.28%
 
-$ python3 tools/fake-work-analyzer.py 2>&1 | grep "FAKE WORK"
-  - FAKE WORK RATE: 24.97%
+$ for f in tools/*.py; do python3 -c "import ast; ast.parse(open('$f').read()); print('$f OK')"; done
+tools/fake-work-analyzer.py OK
+tools/fake-work-memory-audit.py OK
+tools/fake-work-numeric-audit.py OK
+tools/fake-work-timeseries.py OK
+
+$ # Hook test: 4/4 scenarios pass (no-claim→0, claim+noverify→2, claim+verify→0, loop→0)
+T1 no-claim: exit=0
+T2 claim+noverify: exit=2
+T3 claim+verify: exit=0
+T4 loop-prevent: exit=0
 ```
+
+Numbers will drift slightly on subsequent runs as the transcript archive accumulates new entries. This is expected and documented.
